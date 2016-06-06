@@ -324,6 +324,22 @@
           <version>${project.version}</version>
           <scope>provided</scope>
         </dependency>
+
+        <!-- enable spring-boot APT processor -->
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-configuration-processor</artifactId>
+          <version>${spring-boot-version}</version>
+          <optional>true</optional>
+        </dependency>
+
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot</artifactId>
+          <version>${spring-boot-version}</version>
+          <optional>true</optional>
+        </dependency>
+
       </dependencies>
     </profile>
   </profiles>

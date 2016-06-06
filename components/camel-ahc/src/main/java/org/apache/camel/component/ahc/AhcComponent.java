@@ -32,10 +32,12 @@ import org.apache.camel.util.jsse.SSLContextParameters;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  *  To call external HTTP services using <a href="http://github.com/sonatype/async-http-client">Async Http Client</a>
  */
+@ConfigurationProperties(prefix = "camel.ahc", merge = false)
 public class AhcComponent extends HeaderFilterStrategyComponent {
     
     private static final Logger LOG = LoggerFactory.getLogger(AhcComponent.class);
