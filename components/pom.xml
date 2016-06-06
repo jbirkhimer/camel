@@ -317,30 +317,21 @@
       </activation>
 
       <dependencies>
-        <!-- enable the APT processor -->
+        <!-- enable the APT processors -->
         <dependency>
           <groupId>org.apache.camel</groupId>
           <artifactId>apt</artifactId>
           <version>${project.version}</version>
           <scope>provided</scope>
         </dependency>
-
-        <!-- enable spring-boot APT processor -->
         <dependency>
-          <groupId>org.springframework.boot</groupId>
-          <artifactId>spring-boot-configuration-processor</artifactId>
-          <version>${spring-boot-version}</version>
-          <optional>true</optional>
+          <groupId>org.apache.camel</groupId>
+          <artifactId>apt-spring-boot</artifactId>
+          <version>${project.version}</version>
+          <scope>provided</scope>
         </dependency>
-
-        <dependency>
-          <groupId>org.springframework.boot</groupId>
-          <artifactId>spring-boot</artifactId>
-          <version>${spring-boot-version}</version>
-          <optional>true</optional>
-        </dependency>
-
       </dependencies>
     </profile>
   </profiles>
+
 </project>

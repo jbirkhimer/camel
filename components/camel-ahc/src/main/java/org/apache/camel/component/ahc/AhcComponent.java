@@ -21,23 +21,21 @@ import java.util.Map;
 
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
-
 import com.ning.http.client.Realm;
 import org.apache.camel.Endpoint;
 import org.apache.camel.impl.HeaderFilterStrategyComponent;
+import org.apache.camel.spi.UriComponent;
 import org.apache.camel.util.IntrospectionSupport;
 import org.apache.camel.util.URISupport;
 import org.apache.camel.util.UnsafeUriCharactersEncoder;
 import org.apache.camel.util.jsse.SSLContextParameters;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  *  To call external HTTP services using <a href="http://github.com/sonatype/async-http-client">Async Http Client</a>
  */
-@ConfigurationProperties(prefix = "camel.ahc", merge = false)
+@UriComponent(prefix = "camel.component.ahc")
 public class AhcComponent extends HeaderFilterStrategyComponent {
     
     private static final Logger LOG = LoggerFactory.getLogger(AhcComponent.class);

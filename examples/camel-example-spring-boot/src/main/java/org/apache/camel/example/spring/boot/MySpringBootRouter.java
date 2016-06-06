@@ -16,20 +16,31 @@
  */
 package org.apache.camel.example.spring.boot;
 
+import org.apache.camel.component.ahc.AhcComponent;
 import org.apache.camel.spring.boot.FatJarRouter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
 @SpringBootApplication
+@EnableConfigurationProperties(AhcComponent.class)
 public class MySpringBootRouter extends FatJarRouter {
 
     @Autowired
     private HealthEndpoint health;
 
+    @Autowired
+    private AhcComponent ahc;
+
     @Override
     public void configure() {
+        log.warn("AhcComponent isAllowJavaSerializedObject = " + ahc.isAllowJavaSerializedObject());
+        log.warn("AhcComponent isAllowJavaSerializedObject = " + ahc.isAllowJavaSerializedObject());
+        log.warn("AhcComponent isAllowJavaSerializedObject = " + ahc.isAllowJavaSerializedObject());
+
+
         from("timer:trigger")
                 .transform().simple("ref:myBean")
                 .to("log:out");
