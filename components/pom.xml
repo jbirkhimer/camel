@@ -334,22 +334,20 @@
       </activation>
 
       <dependencies>
-        <!-- enable the APT processors -->
+        <!-- enable Camel APT processors -->
         <dependency>
           <groupId>org.apache.camel</groupId>
           <artifactId>apt</artifactId>
           <version>${project.version}</version>
           <scope>provided</scope>
         </dependency>
-
-    <!-- spring-boot auto configuration APT processor -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-configuration-processor</artifactId>
-      <optional>true</optional>
-      <version>${spring-boot-version}</version>
-    </dependency>
-
+        <!-- enable Spring Boot configuration APT processor -->
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-configuration-processor</artifactId>
+          <version>${spring-boot-version}</version>
+          <optional>provided</optional>
+        </dependency>
       </dependencies>
     </profile>
   </profiles>
