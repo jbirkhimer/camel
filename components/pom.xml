@@ -31,6 +31,16 @@
   <description>Camel Components</description>
   <packaging>pom</packaging>
 
+  <!-- to support spring-boot auto configuration in the Camel components -->
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot</artifactId>
+      <version>${spring-boot-version}</version>
+      <scope>provided</scope>
+    </dependency>
+ </dependencies>
+
   <modules>
     <!-- we want to test these modules first to catch any errors early as possible -->
     <module>camel-test</module>
@@ -286,15 +296,16 @@
               <goal>prepare-components</goal>
             </goals>
             <phase>generate-resources</phase>
-         </execution>
+          </execution>
           <execution>
             <id>validate</id>
             <goals>
               <goal>validate-components</goal>
+              <goal>prepare-spring-boot-auto-configuration</goal>
             </goals>
             <phase>prepare-package</phase>
-         </execution>
-         <execution>
+          </execution>
+          <execution>
             <id>readme</id>
             <goals>
               <goal>update-readme</goal>
@@ -324,12 +335,15 @@
           <version>${project.version}</version>
           <scope>provided</scope>
         </dependency>
-        <dependency>
-          <groupId>org.apache.camel</groupId>
-          <artifactId>apt-spring-boot</artifactId>
-          <version>${project.version}</version>
-          <scope>provided</scope>
-        </dependency>
+
+    <!-- spring-boot auto configuration APT processor -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+      <version>${spring-boot-version}</version>
+    </dependency>
+
       </dependencies>
     </profile>
   </profiles>

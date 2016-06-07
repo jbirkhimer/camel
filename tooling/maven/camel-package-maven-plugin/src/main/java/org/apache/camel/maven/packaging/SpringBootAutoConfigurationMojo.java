@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p/>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,22 +28,25 @@ import java.util.TreeSet;
 import org.apache.camel.maven.packaging.model.ComponentModel;
 import org.apache.camel.maven.packaging.model.ComponentOptionModel;
 import org.apache.camel.maven.packaging.model.EndpointOptionModel;
+import org.apache.commons.io.FileUtils;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
-import org.mvel2.templates.TemplateRuntime;
+import org.jboss.forge.roaster.Roaster;
+import org.jboss.forge.roaster.model.source.JavaClassSource;
+import org.jboss.forge.roaster.model.source.PropertySource;
+import org.jboss.forge.roaster.model.util.Strings;
 import org.sonatype.plexus.build.incremental.BuildContext;
 
 import static org.apache.camel.maven.packaging.JSonSchemaHelper.getSafeValue;
 import static org.apache.camel.maven.packaging.PackageHelper.loadText;
-import static org.apache.camel.maven.packaging.PackageHelper.writeText;
 
 /**
  * Generate Spring Boot auto configuration files for Camel components.
  *
- * @goal generate-spring-boot-auto-configuration
+ * @goal prepare-spring-boot-auto-configuration
  */
 public class SpringBootAutoConfigurationMojo extends AbstractMojo {
 
@@ -64,6 +67,13 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
     protected File buildDir;
 
     /**
+     * The source directory
+     *
+     * @parameter default-value="${basedir}/src/main/java"
+     */
+    protected File srcDir;
+
+    /**
      * build context to check changed files and mark them for refresh (used for
      * m2e compatibility)
      *
@@ -80,105 +90,73 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
         final Set<File> jsonFiles = new TreeSet<File>();
         PackageHelper.findJsonFiles(buildDir, jsonFiles, new PackageHelper.CamelComponentsModelFilter());
 
-        // only if there is components we should update the documentation files
+        // create auto configuration for the components
         if (!componentNames.isEmpty()) {
             getLog().info("Found " + componentNames.size() + " components");
             for (String componentName : componentNames) {
                 String json = loadComponentJson(jsonFiles, componentName);
                 if (json != null) {
-
-                    // add as groups
-                    File file = new File(buildDir + "target/classes/META-INF", "spring-configuration-metadata.json");
                     ComponentModel model = generateComponentModel(componentName, json);
 
-                    boolean exists = file.exists();
-                    boolean updated = false;
-                    if (model.getComponentOptions() != null) {
-                        String options = templateComponentOptions(model);
-                        updated |= updateComponentOptions(file, options);
-                    }
-                    if (model.getEndpointOptions() != null) {
-                        String options = templateEndpointOptions(model);
-                        updated |= updateEndpointOptions(file, options);
-                    }
+                    // package name
+                    int pos = model.getJavaType().lastIndexOf(".");
+                    String pkg = model.getJavaType().substring(0, pos) + ".springboot";
 
-                    if (updated) {
-                        getLog().info("Updated doc file: " + file);
-                    } else if (exists) {
-                        getLog().info("No changes to doc file: " + file);
-                    } else {
-                        getLog().info("No component doc file: " + file);
-                    }
+                    getLog().info("Creating Java package " + pkg);
+                    createAutoConfigurationClass(pkg, model);
                 }
             }
         }
     }
 
-    private boolean updateComponentOptions(File file, String changed) throws MojoExecutionException {
-        if (!file.exists()) {
-            return false;
+    private void createAutoConfigurationClass(String packageName, ComponentModel model) throws MojoFailureException {
+        final JavaClassSource javaClass = Roaster.create(JavaClassSource.class);
+
+        int pos = model.getJavaType().lastIndexOf(".");
+        String name = model.getJavaType().substring(pos + 1);
+        name = name.replace("Component", "ComponentConfiguration");
+        javaClass.setPackage(packageName).setName(name);
+
+        if (!Strings.isBlank(model.getDescription())) {
+            javaClass.getJavaDoc().setFullText(model.getDescription());
         }
+
+        String prefix = "camel.component." + model.getScheme();
+        javaClass.addAnnotation("org.springframework.boot.context.properties.ConfigurationProperties").setStringValue("prefix", prefix);
+
+        for (ComponentOptionModel option : model.getComponentOptions()) {
+            PropertySource<JavaClassSource> prop = javaClass.addProperty(option.getJavaType(), option.getName());
+            if ("true".equals(option.getDeprecated())) {
+                prop.getField().addAnnotation(Deprecated.class);
+            }
+            if (!Strings.isBlank(option.getDescription())) {
+                prop.getField().getJavaDoc().setFullText(option.getDescription());
+            }
+        }
+
+        String code = javaClass.toString();
+        getLog().info("Source code generated:\n" + code);
+
+        String fileName = packageName.replaceAll("\\.", "\\/") + "/" + name + ".java";
+        File target = new File(srcDir, fileName);
 
         try {
-            String text = loadText(new FileInputStream(file));
-
-            String existing = StringHelper.between(text, "// component options: START", "// component options: END");
-            if (existing != null) {
-                // remove leading line breaks etc
-                existing = existing.trim();
-                changed = changed.trim();
-                if (existing.equals(changed)) {
-                    return false;
+            if (target.exists()) {
+                String existing = FileUtils.readFileToString(target);
+                if (!code.equals(existing)) {
+                    // update
+                    FileUtils.write(target, code);
+                    getLog().info("Updated existing file: " + target);
                 } else {
-                    String before = StringHelper.before(text, "// component options: START");
-                    String after = StringHelper.after(text, "// component options: END");
-                    text = before + "\n// component options: START\n" + changed + "\n// component options: END\n" + after;
-                    writeText(file, text);
-                    return true;
+                    getLog().info("No changes to existing file: " + target);
                 }
             } else {
-                getLog().warn("Cannot find markers in file " + file);
-                getLog().warn("Add the following markers");
-                getLog().warn("\t// component options: START");
-                getLog().warn("\t// component options: END");
-                return false;
+                // write
+                FileUtils.write(target, code);
+                getLog().info("Created file: " + target);
             }
         } catch (Exception e) {
-            throw new MojoExecutionException("Error reading file " + file + " Reason: " + e, e);
-        }
-    }
-
-    private boolean updateEndpointOptions(File file, String changed) throws MojoExecutionException {
-        if (!file.exists()) {
-            return false;
-        }
-
-        try {
-            String text = loadText(new FileInputStream(file));
-
-            String existing = StringHelper.between(text, "// endpoint options: START", "// endpoint options: END");
-            if (existing != null) {
-                // remove leading line breaks etc
-                existing = existing.trim();
-                changed = changed.trim();
-                if (existing.equals(changed)) {
-                    return false;
-                } else {
-                    String before = StringHelper.before(text, "// endpoint options: START");
-                    String after = StringHelper.after(text, "// endpoint options: END");
-                    text = before + "\n// endpoint options: START\n" + changed + "\n// endpoint options: END\n" + after;
-                    writeText(file, text);
-                    return true;
-                }
-            } else {
-                getLog().warn("Cannot find markers in file " + file);
-                getLog().warn("Add the following markers");
-                getLog().warn("\t// endpoint options: START");
-                getLog().warn("\t// endpoint options: END");
-                return false;
-            }
-        } catch (Exception e) {
-            throw new MojoExecutionException("Error reading file " + file + " Reason: " + e, e);
+            throw new MojoFailureException("IOError with file " + target, e);
         }
     }
 
@@ -244,45 +222,10 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
             option.setDeprecated(getSafeValue("deprecated", row));
             option.setDefaultValue(getSafeValue("defaultValue", row));
             option.setDescription(getSafeValue("description", row));
-            // lets put required in the description
-            if ("true".equals(option.getRequired())) {
-                String desc = "*Required* " + option.getDescription();
-                option.setDescription(desc);
-            }
             component.addEndpointOption(option);
         }
 
         return component;
-    }
-
-    private String templateComponentHeader(ComponentModel model) throws MojoExecutionException {
-        try {
-            String template = loadText(ReadmeComponentMojo.class.getClassLoader().getResourceAsStream("component-header.mvel"));
-            String out = (String) TemplateRuntime.eval(template, model);
-            return out;
-        } catch (Exception e) {
-            throw new MojoExecutionException("Error processing mvel template. Reason: " + e, e);
-        }
-    }
-
-    private String templateComponentOptions(ComponentModel model) throws MojoExecutionException {
-        try {
-            String template = loadText(ReadmeComponentMojo.class.getClassLoader().getResourceAsStream("component-options.mvel"));
-            String out = (String) TemplateRuntime.eval(template, model);
-            return out;
-        } catch (Exception e) {
-            throw new MojoExecutionException("Error processing mvel template. Reason: " + e, e);
-        }
-    }
-
-    private String templateEndpointOptions(ComponentModel model) throws MojoExecutionException {
-        try {
-            String template = loadText(ReadmeComponentMojo.class.getClassLoader().getResourceAsStream("endpoint-options.mvel"));
-            String out = (String) TemplateRuntime.eval(template, model);
-            return out;
-        } catch (Exception e) {
-            throw new MojoExecutionException("Error processing mvel template. Reason: " + e, e);
-        }
     }
 
     private List<String> findComponentNames() {
