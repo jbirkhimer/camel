@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,10 +36,18 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
 import org.jboss.forge.roaster.Roaster;
+import org.jboss.forge.roaster.model.source.AnnotationSource;
 import org.jboss.forge.roaster.model.source.JavaClassSource;
+import org.jboss.forge.roaster.model.source.MethodSource;
 import org.jboss.forge.roaster.model.source.PropertySource;
+import org.jboss.forge.roaster.model.util.Assert;
 import org.jboss.forge.roaster.model.util.Strings;
 import org.sonatype.plexus.build.incremental.BuildContext;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import static org.apache.camel.maven.packaging.JSonSchemaHelper.getSafeValue;
 import static org.apache.camel.maven.packaging.PackageHelper.loadText;
@@ -102,14 +111,20 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                     int pos = model.getJavaType().lastIndexOf(".");
                     String pkg = model.getJavaType().substring(0, pos) + ".springboot";
 
-                    getLog().info("Creating Java package " + pkg);
-                    createAutoConfigurationClass(pkg, model);
+                    getLog().info("Creating/Updating ComponentConfiguration source code in package " + pkg);
+                    createComponentConfigurationSource(pkg, model);
+
+                    getLog().info("Creating/Updating ComponentAutoConfiguration source code in package " + pkg);
+                    createComponentAutoConfigurationSource(pkg, model);
+
+                    getLog().info("Creating/Updating spring.factories source code");
+                    // TODO:
                 }
             }
         }
     }
 
-    private void createAutoConfigurationClass(String packageName, ComponentModel model) throws MojoFailureException {
+    private void createComponentConfigurationSource(String packageName, ComponentModel model) throws MojoFailureException {
         final JavaClassSource javaClass = Roaster.create(JavaClassSource.class);
 
         int pos = model.getJavaType().lastIndexOf(".");
@@ -158,6 +173,84 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
         } catch (Exception e) {
             throw new MojoFailureException("IOError with file " + target, e);
         }
+    }
+
+    private void createComponentAutoConfigurationSource(String packageName, ComponentModel model) throws MojoFailureException {
+        final JavaClassSource javaClass = Roaster.create(JavaClassSource.class);
+
+        int pos = model.getJavaType().lastIndexOf(".");
+        String name = model.getJavaType().substring(pos + 1);
+        name = name.replace("Component", "ComponentAutoConfiguration");
+        javaClass.setPackage(packageName).setName(name);
+
+        javaClass.addAnnotation(Configuration.class);
+
+        String configurationName = name.replace("ComponentAutoConfiguration", "ComponentConfiguration");
+        AnnotationSource<JavaClassSource> ann = javaClass.addAnnotation(EnableConfigurationProperties.class);
+        ann.setLiteralValue("value", configurationName + ".class");
+
+        // add method for auto configure
+
+        javaClass.addImport("java.util.HashMap");
+        javaClass.addImport("java.util.Map");
+        javaClass.addImport(model.getJavaType());
+        javaClass.addImport("org.apache.camel.CamelContext");
+        javaClass.addImport("org.apache.camel.util.IntrospectionSupport");
+
+        String body = createBody(model.getShortJavaType());
+
+        MethodSource<JavaClassSource> method = javaClass.addMethod()
+            .setName("configureComponent")
+            .setPublic()
+            .setBody(body)
+            .setReturnType(model.getShortJavaType())
+            .addThrows(Exception.class);
+
+        method.addParameter("CamelContext", "camelContext");
+        method.addParameter(configurationName, "configuration");
+
+        method.addAnnotation(Bean.class);
+        method.addAnnotation(ConditionalOnClass.class).setLiteralValue("value", "CamelContext.class");
+        method.addAnnotation(ConditionalOnMissingBean.class).setLiteralValue("value", model.getShortJavaType() + ".class");
+
+        String code = javaClass.toString();
+        getLog().info("Source code generated:\n" + code);
+
+        String fileName = packageName.replaceAll("\\.", "\\/") + "/" + name + ".java";
+        File target = new File(srcDir, fileName);
+
+        try {
+            if (target.exists()) {
+                String existing = FileUtils.readFileToString(target);
+                if (!code.equals(existing)) {
+                    // update
+                    FileUtils.write(target, code);
+                    getLog().info("Updated existing file: " + target);
+                } else {
+                    getLog().info("No changes to existing file: " + target);
+                }
+            } else {
+                // write
+                FileUtils.write(target, code);
+                getLog().info("Created file: " + target);
+            }
+        } catch (Exception e) {
+            throw new MojoFailureException("IOError with file " + target, e);
+        }
+    }
+
+    private String createBody(String shortJavaType) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(shortJavaType).append(" component = new ").append(shortJavaType).append("();").append("\n");
+        sb.append("component.setCamelContext(camelContext);\n");
+        sb.append("\n");
+        sb.append("Map<String, Object> parameters = new HashMap<>();\n");
+        sb.append("IntrospectionSupport.getProperties(configuration, parameters, null);\n");
+        sb.append("\n");
+        sb.append("IntrospectionSupport.setProperties(camelContext, camelContext.getTypeConverter(), component, parameters);\n");
+        sb.append("\n");
+        sb.append("return component;");
+        return sb.toString();
     }
 
     private String loadComponentJson(Set<File> jsonFiles, String componentName) {
