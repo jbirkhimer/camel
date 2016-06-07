@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,8 +19,8 @@ package org.apache.camel.maven.packaging;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,7 +40,6 @@ import org.jboss.forge.roaster.model.source.AnnotationSource;
 import org.jboss.forge.roaster.model.source.JavaClassSource;
 import org.jboss.forge.roaster.model.source.MethodSource;
 import org.jboss.forge.roaster.model.source.PropertySource;
-import org.jboss.forge.roaster.model.util.Assert;
 import org.jboss.forge.roaster.model.util.Strings;
 import org.sonatype.plexus.build.incremental.BuildContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -114,17 +113,13 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                 if (json != null) {
                     ComponentModel model = generateComponentModel(componentName, json);
 
-                    // package name
+                    // use springboot as sub package name so the code is not in normal
+                    // package so the Spring Boot JARs can be optional at runtime
                     int pos = model.getJavaType().lastIndexOf(".");
                     String pkg = model.getJavaType().substring(0, pos) + ".springboot";
 
-                    getLog().info("Creating/Updating ComponentConfiguration source code in package " + pkg);
                     createComponentConfigurationSource(pkg, model);
-
-                    getLog().info("Creating/Updating ComponentAutoConfiguration source code in package " + pkg);
                     createComponentAutoConfigurationSource(pkg, model);
-
-                    getLog().info("Creating/Updating spring.factories source code");
                     createSpringFactorySource(pkg, model);
                 }
             }
@@ -132,7 +127,6 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
     }
 
     private void createSpringFactorySource(String packageName, ComponentModel model) throws MojoFailureException {
-        // TODO: append to any existing file
         StringBuilder sb = new StringBuilder();
         sb.append("org.springframework.boot.autoconfigure.EnableAutoConfiguration=\\\n");
 
@@ -157,8 +151,10 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                     getLog().info("No changes to existing file: " + target);
                 }
             } else {
-                // write
-                FileUtils.write(target, code);
+                InputStream is = getClass().getClassLoader().getResourceAsStream("license-header.txt");
+                String header = loadText(is);
+                FileUtils.write(target, header);
+                FileUtils.write(target, code, true);
                 getLog().info("Created file: " + target);
             }
         } catch (Exception e) {
@@ -208,8 +204,10 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                     getLog().info("No changes to existing file: " + target);
                 }
             } else {
-                // write
-                FileUtils.write(target, code);
+                InputStream is = getClass().getClassLoader().getResourceAsStream("license-header-java.txt");
+                String header = loadText(is);
+                FileUtils.write(target, header);
+                FileUtils.write(target, code, true);
                 getLog().info("Created file: " + target);
             }
         } catch (Exception e) {
@@ -272,8 +270,10 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                     getLog().info("No changes to existing file: " + target);
                 }
             } else {
-                // write
-                FileUtils.write(target, code);
+                InputStream is = getClass().getClassLoader().getResourceAsStream("license-header-java.txt");
+                String header = loadText(is);
+                FileUtils.write(target, header);
+                FileUtils.write(target, code, true);
                 getLog().info("Created file: " + target);
             }
         } catch (Exception e) {
