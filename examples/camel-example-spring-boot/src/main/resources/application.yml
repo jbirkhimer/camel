@@ -24,3 +24,4 @@ camel:
   component:
     ahc:
       allow-java-serialized-object: true
+

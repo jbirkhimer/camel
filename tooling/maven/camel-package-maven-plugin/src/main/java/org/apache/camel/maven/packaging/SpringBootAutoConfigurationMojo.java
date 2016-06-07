@@ -83,6 +83,13 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
     protected File srcDir;
 
     /**
+     * The resources directory
+     *
+     * @parameter default-value="${basedir}/src/main/resources"
+     */
+    protected File resourcesDir;
+
+    /**
      * build context to check changed files and mark them for refresh (used for
      * m2e compatibility)
      *
@@ -118,9 +125,44 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
                     createComponentAutoConfigurationSource(pkg, model);
 
                     getLog().info("Creating/Updating spring.factories source code");
-                    // TODO:
+                    createSpringFactorySource(pkg, model);
                 }
             }
+        }
+    }
+
+    private void createSpringFactorySource(String packageName, ComponentModel model) throws MojoFailureException {
+        // TODO: append to any existing file
+        StringBuilder sb = new StringBuilder();
+        sb.append("org.springframework.boot.autoconfigure.EnableAutoConfiguration=\\\n");
+
+        int pos = model.getJavaType().lastIndexOf(".");
+        String name = model.getJavaType().substring(pos + 1);
+        name = name.replace("Component", "ComponentAutoConfiguration");
+        sb.append(packageName).append(".").append(name).append("\n");
+
+        String code = sb.toString();
+
+        String fileName = "META-INF/spring.factories";
+        File target = new File(resourcesDir, fileName);
+
+        try {
+            if (target.exists()) {
+                String existing = FileUtils.readFileToString(target);
+                if (!code.equals(existing)) {
+                    // update
+                    FileUtils.write(target, code);
+                    getLog().info("Updated existing file: " + target);
+                } else {
+                    getLog().info("No changes to existing file: " + target);
+                }
+            } else {
+                // write
+                FileUtils.write(target, code);
+                getLog().info("Created file: " + target);
+            }
+        } catch (Exception e) {
+            throw new MojoFailureException("IOError with file " + target, e);
         }
     }
 
@@ -150,7 +192,7 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
         }
 
         String code = javaClass.toString();
-        getLog().info("Source code generated:\n" + code);
+        getLog().debug("Source code generated:\n" + code);
 
         String fileName = packageName.replaceAll("\\.", "\\/") + "/" + name + ".java";
         File target = new File(srcDir, fileName);
@@ -214,7 +256,7 @@ public class SpringBootAutoConfigurationMojo extends AbstractMojo {
         method.addAnnotation(ConditionalOnMissingBean.class).setLiteralValue("value", model.getShortJavaType() + ".class");
 
         String code = javaClass.toString();
-        getLog().info("Source code generated:\n" + code);
+        getLog().debug("Source code generated:\n" + code);
 
         String fileName = packageName.replaceAll("\\.", "\\/") + "/" + name + ".java";
         File target = new File(srcDir, fileName);
